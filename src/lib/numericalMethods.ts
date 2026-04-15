@@ -4,6 +4,39 @@ import 'nerdamer/Calculus';
 
 const math = create(all);
 
+// Add 'ln' as an alias for 'log' (natural log)
+math.import({
+  ln: math.log
+});
+
+/**
+ * Pre-processes the function string to handle common mathematical notations
+ * that mathjs might not support directly, like sin^2(x).
+ */
+function preprocessFunction(f: string): string {
+  let processed = f.trim();
+  
+  // Handle ln(x) -> log(x)
+  processed = processed.replace(/\bln\b/g, 'log');
+  
+  // Handle sin^2(x), cos^3(x), etc. -> (sin(x))^2, (cos(x))^3
+  processed = processed.replace(/([a-z]+)\^(\d+)\(([^)]+)\)/gi, '($1($3))^$2');
+  
+  // Handle sin^2 x, cos^3 x (without parentheses) -> (sin(x))^2, (cos(x))^3
+  // Also handles sin^2 (without argument) -> (sin(x))^2
+  const mathFunctions = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'asin', 'acos', 'atan', 'log', 'ln', 'exp', 'sqrt'];
+  mathFunctions.forEach(fn => {
+    // Match fn^digit optionally followed by space and argument
+    const regex = new RegExp(`\\b${fn}\\^(\\d+)(\\s+([a-z0-9]+))?`, 'gi');
+    processed = processed.replace(regex, (match, p1, p2, p3) => {
+      const arg = p3 || 'x';
+      return `(${fn}(${arg}))^${p1}`;
+    });
+  });
+  
+  return processed;
+}
+
 export type IntegrationMethod = 
   | 'rectangle_gauche' 
   | 'rectangle_droite' 
@@ -36,10 +69,11 @@ export interface IntegrationResult {
  */
 export function calculateExact(f: string, a: number, b: number): number | null {
   try {
+    const processed = preprocessFunction(f);
     // Convert mathjs-style power ^ to nerdamer-style ^ (usually same)
     // and handle some common differences if any.
     // nerdamer uses 'defint(expression, start, end, variable)'
-    const expression = f.replace(/pow\(([^,]+),([^)]+)\)/g, '($1)^($2)');
+    const expression = processed.replace(/pow\(([^,]+),([^)]+)\)/g, '($1)^($2)');
     const result = nerdamer(`defint(${expression}, ${a}, ${b}, x)`);
     const val = parseFloat(result.evaluate().text());
     return isNaN(val) ? null : val;
@@ -55,7 +89,7 @@ export function calculateExact(f: string, a: number, b: number): number | null {
 export function isValidFunction(f: string): boolean {
   if (!f || f.trim() === "") return false;
   try {
-    math.parse(f);
+    math.parse(preprocessFunction(f));
     return true;
   } catch (e) {
     return false;
@@ -65,9 +99,10 @@ export function isValidFunction(f: string): boolean {
 export function evaluateFunction(f: string, x: number): number {
   if (!f || f.trim() === "") return NaN;
   try {
-    // We use a simple cache or just evaluate. 
-    // For better performance in loops, we should compile once.
-    return math.evaluate(f, { x });
+    const val = math.evaluate(preprocessFunction(f), { x });
+    if (typeof val === 'number') return val;
+    if (val && typeof val === 'object' && val.isComplex) return NaN;
+    return NaN;
   } catch (e) {
     // Only log if it's not a common parsing error during typing
     if (!(e instanceof Error && e.message.includes('Unexpected end of expression'))) {
@@ -80,11 +115,14 @@ export function evaluateFunction(f: string, x: number): number {
 // Helper to get a compiled evaluator for performance
 function getEvaluator(f: string) {
   try {
-    const node = math.parse(f);
+    const node = math.parse(preprocessFunction(f));
     const code = node.compile();
     return (x: number) => {
       try {
-        return code.evaluate({ x });
+        const val = code.evaluate({ x });
+        if (typeof val === 'number') return val;
+        if (val && typeof val === 'object' && val.isComplex) return NaN;
+        return NaN;
       } catch {
         return NaN;
       }

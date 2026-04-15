@@ -5,6 +5,39 @@ import { create, all } from 'mathjs';
 
 const math = create(all);
 
+// Add 'ln' as an alias for 'log' (natural log)
+math.import({
+  ln: math.log
+});
+
+/**
+ * Pre-processes the function string to handle common mathematical notations
+ * that mathjs might not support directly, like sin^2(x).
+ */
+function preprocessFunction(f: string): string {
+  let processed = f.trim();
+  
+  // Handle ln(x) -> log(x)
+  processed = processed.replace(/\bln\b/g, 'log');
+  
+  // Handle sin^2(x), cos^3(x), etc. -> (sin(x))^2, (cos(x))^3
+  processed = processed.replace(/([a-z]+)\^(\d+)\(([^)]+)\)/gi, '($1($3))^$2');
+  
+  // Handle sin^2 x, cos^3 x (without parentheses) -> (sin(x))^2, (cos(x))^3
+  // Also handles sin^2 (without argument) -> (sin(x))^2
+  const mathFunctions = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'asin', 'acos', 'atan', 'log', 'ln', 'exp', 'sqrt'];
+  mathFunctions.forEach(fn => {
+    // Match fn^digit optionally followed by space and argument
+    const regex = new RegExp(`\\b${fn}\\^(\\d+)(\\s+([a-z0-9]+))?`, 'gi');
+    processed = processed.replace(regex, (match, p1, p2, p3) => {
+      const arg = p3 || 'x';
+      return `(${fn}(${arg}))^${p1}`;
+    });
+  });
+  
+  return processed;
+}
+
 interface IntegrationChartProps {
   f: string;
   a: number;
@@ -54,12 +87,15 @@ export const IntegrationChart: React.FC<IntegrationChartProps> = ({ f, a, b, n, 
     // Compile function for performance
     let evaluator: (x: number) => number;
     try {
-      const node = math.parse(f);
+      const node = math.parse(preprocessFunction(f));
       const code = node.compile();
       evaluator = (x: number) => {
         try {
           const val = code.evaluate({ x });
-          return typeof val === 'number' ? val : NaN;
+          // Handle complex numbers or other non-numeric results from mathjs
+          if (typeof val === 'number') return val;
+          if (val && typeof val === 'object' && val.isComplex) return NaN;
+          return NaN;
         } catch {
           return NaN;
         }
@@ -77,33 +113,65 @@ export const IntegrationChart: React.FC<IntegrationChartProps> = ({ f, a, b, n, 
     const xMin = xStart - padding;
     const xMax = xEnd + padding;
     
-    const points: { x: number, y: number }[] = [];
-    const resolution = 600; // Increased resolution for better accuracy
+    const rawPoints: { x: number, y: number }[] = [];
+    const resolution = 1000; 
     for (let i = 0; i <= resolution; i++) {
       const x = xMin + (i / resolution) * (xMax - xMin);
       const y = evaluator(x);
-      // Filter out non-finite values and extreme values that break scaling
-      if (!isNaN(y) && isFinite(y) && Math.abs(y) < 1e10) {
-        points.push({ x, y });
-      }
+      rawPoints.push({ x, y });
     }
 
-    if (points.length === 0) return;
+    // Filter out extreme values for scaling calculations
+    const validForScaling = rawPoints.filter(p => !isNaN(p.y) && isFinite(p.y) && Math.abs(p.y) < 1e10);
+    if (validForScaling.length === 0) return;
 
     // Robust Y scaling: use percentiles to ignore extreme asymptotic spikes
-    const yValues = points.map(p => p.y).sort((a, b) => a - b);
+    const yValues = validForScaling.map(p => p.y).sort((a, b) => a - b);
     const p5 = yValues[Math.floor(yValues.length * 0.05)];
     const p95 = yValues[Math.floor(yValues.length * 0.95)];
     const yRange = p95 - p5 || 1;
     
-    // Allow some overflow but clip extreme spikes
-    const yMinLimit = p5 - yRange * 2;
-    const yMaxLimit = p95 + yRange * 2;
+    const yMinLimit = p5 - yRange * 3;
+    const yMaxLimit = p95 + yRange * 3;
 
-    const finalPoints = points.filter(p => p.y >= yMinLimit && p.y <= yMaxLimit);
+    // Create segments to handle discontinuities (tan, 1/x, etc.)
+    const segments: { x: number, y: number }[][] = [];
+    let currentSegment: { x: number, y: number }[] = [];
+
+    for (let i = 0; i < rawPoints.length; i++) {
+      const p = rawPoints[i];
+      const prev = rawPoints[i-1];
+
+      const isVisible = !isNaN(p.y) && isFinite(p.y) && p.y >= yMinLimit && p.y <= yMaxLimit;
+
+      if (isVisible) {
+        // Check for asymptote jump (e.g. tan(x) jumping from +inf to -inf)
+        if (prev && !isNaN(prev.y) && isFinite(prev.y)) {
+          const jump = Math.abs(p.y - prev.y);
+          const signChange = Math.sign(p.y) !== Math.sign(prev.y);
+          // If jump is huge and sign changes, it's likely an asymptote
+          if (jump > yRange * 10 && signChange) {
+            if (currentSegment.length > 0) segments.push(currentSegment);
+            currentSegment = [];
+          }
+        }
+        currentSegment.push(p);
+      } else {
+        if (currentSegment.length > 0) segments.push(currentSegment);
+        currentSegment = [];
+      }
+    }
+    if (currentSegment.length > 0) segments.push(currentSegment);
+
+    let yMin = d3.min(validForScaling, d => Math.max(yMinLimit, Math.min(yMaxLimit, d.y)))!;
+    let yMax = d3.max(validForScaling, d => Math.max(yMinLimit, Math.min(yMaxLimit, d.y)))!;
     
-    const yMin = d3.min(finalPoints, d => d.y)!;
-    const yMax = d3.max(finalPoints, d => d.y)!;
+    // Prevent extreme zoom on floating point noise for constant functions (like sin^2 + cos^2)
+    if (Math.abs(yMax - yMin) < 1e-10) {
+      yMin -= 0.5;
+      yMax += 0.5;
+    }
+    
     const yPadding = (yMax - yMin) * 0.1 || 1;
 
     const xScale = d3.scaleLinear()
@@ -189,18 +257,20 @@ export const IntegrationChart: React.FC<IntegrationChartProps> = ({ f, a, b, n, 
       }
     }
 
-    // Draw the main curve
+    // Draw the main curve segments
     const line = d3.line<{ x: number, y: number }>()
       .x(d => xScale(d.x))
       .y(d => yScale(d.y))
-      .curve(d3.curveLinear); // Use linear for exact plotting without smoothing artifacts
+      .curve(d3.curveLinear);
 
-    svg.append("path")
-      .datum(points)
-      .attr("fill", "none")
-      .attr("stroke", "#0f172a")
-      .attr("stroke-width", 2)
-      .attr("d", line);
+    segments.forEach(segment => {
+      svg.append("path")
+        .datum(segment)
+        .attr("fill", "none")
+        .attr("stroke", "#0f172a")
+        .attr("stroke-width", 2)
+        .attr("d", line);
+    });
 
     // Helper functions
     function drawRectangle(group: any, x1: number, x2: number, yBase: number, yTop: number, color: string) {
