@@ -1,20 +1,56 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Integrix - Precision in every integral
 
-# Run and deploy your AI Studio app
+Integrix est une application web avancée pour l'intégration numérique, offrant une visualisation en temps réel et une analyse comparative de différentes méthodes mathématiques.
 
-This contains everything you need to run your app locally.
+## 🚀 Fonctionnalités
 
-View your app in AI Studio: https://ai.studio/apps/2d537e0b-d25d-4f00-b634-7c44ca69cde6
+- **Calcul Symbolique** : Utilise Nerdamer pour fournir des valeurs exactes analytiques.
+- **Méthodes Numériques** : Rectangle (Gauche/Droite), Point Milieu, Trapèze, Simpson, Romberg et Runge-Kutta 4.
+- **Visualisation Dynamique** : Graphiques interactifs avec D3.js.
+- **Mode Points** : Intégration à partir de données discrètes.
+- **Analyse Comparative** : Tableau des erreurs et temps d'exécution.
 
-## Run Locally
+## 🛠️ Prérequis
 
-**Prerequisites:**  Node.js
+Pour faire tourner l'application localement, vous avez besoin de :
 
+- **Node.js** (Version 18 ou supérieure recommandée)
+- **npm** (inclus avec Node.js)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 📦 Installation
+
+1. **Téléchargez le code source** (ou clonez le dépôt).
+2. Ouvrez un terminal dans le dossier du projet.
+3. Installez les dépendances :
+   ```bash
+   npm install
+   ```
+
+## 🏃 Lancement
+
+Pour lancer l'application en mode développement :
+
+```bash
+npm run dev
+```
+
+Une fois lancé, ouvrez votre navigateur à l'adresse : [http://localhost:3000](http://localhost:3000)
+
+## 🏗️ Construction pour la Production
+
+Pour générer les fichiers optimisés pour le déploiement :
+
+```bash
+npm run build
+```
+
+Les fichiers seront générés dans le dossier `dist/`.
+
+## 📚 Technologies utilisées
+
+- **React 18** + **TypeScript**
+- **Vite** (Build tool)
+- **Tailwind CSS** (Styling)
+- **D3.js** (Visualisation)
+- **Mathjs** & **Nerdamer** (Calculs mathématiques)
+- **Lucide React** (Icônes)
