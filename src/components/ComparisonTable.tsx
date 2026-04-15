@@ -24,6 +24,7 @@ const methodLabels: Record<IntegrationMethod, string> = {
   simpson: "Simpson (1/3)",
   romberg: "Romberg",
   rk4: "Runge-Kutta 4",
+  lin_log: "Lin-Log",
 };
 
 export const ComparisonTable: React.FC<ComparisonTableProps> = ({ results, selectedMethod, onSelectMethod }) => {

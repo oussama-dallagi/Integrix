@@ -177,6 +177,10 @@ export const IntegrationChart: React.FC<IntegrationChartProps> = ({ f, a, b, n, 
         const y1 = evaluator(x_i);
         const y2 = evaluator(x_next);
         drawTrapezoid(methodGroup, xScale(x_i), xScale(x_next), yScale(0), yScale(y1), yScale(y2), accentColor);
+      } else if (selectedMethod === 'lin_log') {
+        const y1 = evaluator(x_i);
+        const y2 = evaluator(x_next);
+        drawLinLog(methodGroup, x_i, x_next, y1, y2, xScale, yScale, accentColor);
       } else if (selectedMethod === 'simpson') {
         const y1 = evaluator(x_i);
         const y2 = evaluator(x_i + h / 2);
@@ -244,6 +248,37 @@ export const IntegrationChart: React.FC<IntegrationChartProps> = ({ f, a, b, n, 
 
       group.append("path")
         .datum(parabolaPoints)
+        .attr("fill", color)
+        .attr("fill-opacity", 0.12)
+        .attr("stroke", color)
+        .attr("stroke-width", 1)
+        .attr("stroke-dasharray", "3 2")
+        .attr("d", areaPath);
+    }
+
+    function drawLinLog(group: any, x1: number, x2: number, y1: number, y2: number, xScale: any, yScale: any, color: string) {
+      if (y1 <= 0 || y2 <= 0 || Math.abs(y1 - y2) < 1e-12) {
+        drawTrapezoid(group, xScale(x1), xScale(x2), yScale(0), yScale(y1), yScale(y2), color);
+        return;
+      }
+
+      const logPoints: {x: number, y: number}[] = [];
+      const res = 15;
+      const k = Math.log(y2 / y1) / (x2 - x1);
+      
+      for (let j = 0; j <= res; j++) {
+        const x = x1 + (j / res) * (x2 - x1);
+        const y = y1 * Math.exp(k * (x - x1));
+        logPoints.push({ x, y });
+      }
+
+      const areaPath = d3.area<{x: number, y: number}>()
+        .x(d => xScale(d.x))
+        .y0(yScale(0))
+        .y1(d => yScale(d.y));
+
+      group.append("path")
+        .datum(logPoints)
         .attr("fill", color)
         .attr("fill-opacity", 0.12)
         .attr("stroke", color)

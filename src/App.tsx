@@ -19,6 +19,7 @@ const methodLabels: Record<string, string> = {
   simpson: "Simpson (1/3)",
   romberg: "Romberg",
   rk4: "Runge-Kutta 4",
+  lin_log: "Lin-Log",
 };
 
 export default function App() {
@@ -75,7 +76,8 @@ export default function App() {
       'trapeze': 'trapeze_points',
       'simpson': 'simpson_points',
       'romberg': 'romberg_points',
-      'rk4': 'rk4_points'
+      'rk4': 'rk4_points',
+      'lin_log': 'lin_log_points'
     };
     return mapping[selectedMethod];
   }, [selectedMethod]);

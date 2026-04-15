@@ -134,6 +134,36 @@ export const PointsChart: React.FC<PointsChartProps> = ({ pointsX, pointsY, n, m
         polyPoints = `${xScale(x1)},${yScale(0)} ${xScale(x1)},${yScale(yMid)} ${xScale(x2)},${yScale(yMid)} ${xScale(x2)},${yScale(0)}`;
       } else if (method === 'trapeze_points' || method === 'romberg_points') {
         polyPoints = `${xScale(x1)},${yScale(0)} ${xScale(x1)},${yScale(y1)} ${xScale(x2)},${yScale(y2)} ${xScale(x2)},${yScale(0)}`;
+      } else if (method === 'lin_log_points') {
+        if (y1 <= 0 || y2 <= 0 || Math.abs(y1 - y2) < 1e-12) {
+          polyPoints = `${xScale(x1)},${yScale(0)} ${xScale(x1)},${yScale(y1)} ${xScale(x2)},${yScale(y2)} ${xScale(x2)},${yScale(0)}`;
+        } else {
+          // Draw exponential curve for lin-log
+          const logPoints: {x: number, y: number}[] = [];
+          const res = 10;
+          const k = Math.log(y2 / y1) / (x2 - x1);
+          for (let j = 0; j <= res; j++) {
+            const xVal = x1 + (j / res) * (x2 - x1);
+            const yVal = y1 * Math.exp(k * (xVal - x1));
+            logPoints.push({ x: xVal, y: yVal });
+          }
+          
+          const areaPath = d3.area<{x: number, y: number}>()
+            .x(d => xScale(d.x))
+            .y0(yScale(0))
+            .y1(d => yScale(d.y));
+
+          svg.append("path")
+            .datum(logPoints)
+            .attr("fill", accentColor)
+            .attr("fill-opacity", 0.12)
+            .attr("stroke", accentColor)
+            .attr("stroke-width", 1)
+            .attr("stroke-dasharray", "3 2")
+            .attr("d", areaPath);
+          
+          continue; // Skip the polygon append below
+        }
       } else if (method === 'simpson_points' || method === 'rk4_points') {
         // Visualize with trapezoids for simplicity, but solid line
         polyPoints = `${xScale(x1)},${yScale(0)} ${xScale(x1)},${yScale(y1)} ${xScale(x2)},${yScale(y2)} ${xScale(x2)},${yScale(0)}`;

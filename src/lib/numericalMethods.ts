@@ -11,7 +11,8 @@ export type IntegrationMethod =
   | 'trapeze' 
   | 'simpson' 
   | 'romberg' 
-  | 'rk4';
+  | 'rk4'
+  | 'lin_log';
 
 export type PointIntegrationMethod =
   | 'rectangle_gauche_points'
@@ -20,7 +21,8 @@ export type PointIntegrationMethod =
   | 'trapeze_points'
   | 'simpson_points'
   | 'romberg_points'
-  | 'rk4_points';
+  | 'rk4_points'
+  | 'lin_log_points';
 
 export interface IntegrationResult {
   method: IntegrationMethod;
@@ -190,6 +192,28 @@ export function rk4(evaluator: (x: number) => number, a: number, b: number, n: n
   return y;
 }
 
+// 8. Lin-Log (Linear up / Log down)
+export function linLog(evaluator: (x: number) => number, a: number, b: number, n: number): number {
+  const h = (b - a) / n;
+  let sum = 0;
+  for (let i = 0; i < n; i++) {
+    const x1 = a + i * h;
+    const x2 = a + (i + 1) * h;
+    const y1 = evaluator(x1);
+    const y2 = evaluator(x2);
+    
+    if (y1 <= 0 || y2 <= 0) {
+      // Fallback to trapezoid if log is impossible
+      sum += (h / 2) * (y1 + y2);
+    } else if (Math.abs(y1 - y2) < 1e-12) {
+      sum += h * y1;
+    } else {
+      sum += h * (y2 - y1) / (Math.log(y2) - Math.log(y1));
+    }
+  }
+  return sum;
+}
+
 export interface IntegrationSummary {
   results: IntegrationResult[];
   reference: number;
@@ -211,6 +235,7 @@ export function calculateAll(f: string, a: number, b: number, n: number): Integr
     { name: 'simpson', fn: simpson },
     { name: 'romberg', fn: romberg },
     { name: 'rk4', fn: rk4 },
+    { name: 'lin_log', fn: linLog },
   ];
 
   const results: IntegrationResult[] = [];
@@ -295,6 +320,21 @@ export function calculateFromPoints(
         sum += (h / 2) * (y[i] + y[i+1]);
       }
       break;
+
+    case 'lin_log_points':
+      for (let i = 0; i < nToUse; i++) {
+        const h = x[i+1] - x[i];
+        const y1 = y[i];
+        const y2 = y[i+1];
+        if (y1 <= 0 || y2 <= 0) {
+          sum += (h / 2) * (y1 + y2);
+        } else if (Math.abs(y1 - y2) < 1e-12) {
+          sum += h * y1;
+        } else {
+          sum += h * (y2 - y1) / (Math.log(y2) - Math.log(y1));
+        }
+      }
+      break;
   }
 
   return sum;
@@ -344,6 +384,7 @@ export function calculateAllFromPoints(x: number[], y: number[], n: number): Int
     { name: 'simpson', fn: simpson },
     { name: 'romberg', fn: romberg },
     { name: 'rk4', fn: rk4 },
+    { name: 'lin_log', fn: linLog },
   ];
 
   const results: IntegrationResult[] = [];
